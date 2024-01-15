@@ -2,7 +2,9 @@ include $(PLATFORM_PATH)/docker-saiserver-mrvl.dep
 include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.dep
 include $(PLATFORM_PATH)/docker-syncd-mrvl.dep
 include $(PLATFORM_PATH)/libsaithrift-dev.dep
+ifeq ($(CONFIGURED_ARCH),arm64)
 include $(PLATFORM_PATH)/mrvl-prestera.dep
+endif
 include $(PLATFORM_PATH)/one-image.dep
 include $(PLATFORM_PATH)/platform-marvell.dep
 include $(PLATFORM_PATH)/platform-nokia.dep

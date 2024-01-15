@@ -1,7 +1,12 @@
 # Marvell SAI
 
-export MRVL_SAI_VERSION = 1.13.0-1
-export MRVL_SAI = mrvllibsai_amd64_$(MRVL_SAI_VERSION).deb
+ifeq ($(CONFIGURED_ARCH),arm64)
+MRVL_SAI_VERSION = 1.12.0-2
+else
+MRVL_SAI_VERSION = 1.13.0-1
+endif
+export $(MRVL_SAI_VERSION)
+export MRVL_SAI = mrvllibsai_$(MRVL_SAI_VERSION)_$(PLATFORM_ARCH).deb
 
 $(MRVL_SAI)_SRC_PATH = $(PLATFORM_PATH)/sai
 $(eval $(call add_conflict_package,$(MRVL_SAI),$(LIBSAIVS_DEV)))
