@@ -11,7 +11,7 @@ $(NOKIA_7215_PLATFORM)_DEPENDS += $(LINUX_HEADERS) $(LINUX_HEADERS_COMMON)
 $(NOKIA_7215_PLATFORM)_PLATFORM = arm64-nokia_ixs7215_52xb-r0
 
 MPATH       := $($(NOKIA_7215_PLATFORM)_SRC_PATH)
-DEP_FILES   := $(SONIC_COMMON_FILES_LIST) platform/marvell-arm64/platform-nokia.mk
+DEP_FILES   := $(SONIC_COMMON_FILES_LIST) platform/marvell/platform-nokia.mk
 DEP_FILES   += $(SONIC_COMMON_BASE_FILES_LIST)
 DEP_FILES   += $(shell git ls-files $(MPATH))
 
