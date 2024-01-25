@@ -41,6 +41,7 @@ def main(argv):
             it.close()
     # dnx platform is special broadcom platform, add it manually
     platforms.add('broadcom-dnx')
+    platforms.add('marvell-vs')
 
     device_folder = os.path.normpath(args.device_folder)
     base_level = len(device_folder.split(os.sep))
