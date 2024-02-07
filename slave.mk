@@ -480,12 +480,12 @@ $(eval $(rfs_target)_INSTALLER=$(1))
 $(eval $(rfs_target)_MACHINE=$($(1)_MACHINE))
 $(eval SONIC_RFS_TARGETS+=$(rfs_target))
 
-$(if $($(1)_DEPENDENT_MACHINE),\
-	$(eval dependent_rfs_target=$(call rfs_build_target_name,$(1),$($(1)_DEPENDENT_MACHINE)))
+$(foreach dep_machine, $($(1)_DEPENDENT_MACHINE), \
+	$(eval dependent_rfs_target=$(call rfs_build_target_name,$(1),$(dep_machine)))
 	$(eval $(dependent_rfs_target)_INSTALLER=$(1))
-	$(eval $(dependent_rfs_target)_MACHINE=$($(1)_DEPENDENT_MACHINE))
+	$(eval $(dependent_rfs_target)_MACHINE=$(dep_machine))
 	$(eval SONIC_RFS_TARGETS+=$(dependent_rfs_target))
-	$(eval $(rfs_target)_DEPENDENT_RFS=$(dependent_rfs_target)))
+	$(eval $(rfs_target)_DEPENDENT_RFS+=$(dependent_rfs_target)))
 endef
 
 $(foreach installer,$(SONIC_INSTALLERS),$(eval $(call rfs_define_target,$(installer))))

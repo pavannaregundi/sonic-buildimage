@@ -4,7 +4,7 @@ DOCKER_SYNCD_PLATFORM_CODE = mrvl
 include $(PLATFORM_PATH)/../template/docker-syncd-bullseye.mk
 
 $(DOCKER_SYNCD_BASE)_DEPENDS += $(SYNCD)
-$(DOCKER_SYNCD_BASE)_DEPENDS += $(MRVL_SAI)
+#$(DOCKER_SYNCD_BASE)_DEPENDS += $(MRVL_SAI)
 
 $(DOCKER_SYNCD_BASE)_DBG_DEPENDS += $(SYNCD_DBG) \
                                 $(LIBSWSSCOMMON_DBG) \
