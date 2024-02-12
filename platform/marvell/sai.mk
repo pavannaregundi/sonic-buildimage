@@ -2,6 +2,8 @@
 
 ifeq ($(CONFIGURED_ARCH),arm64)
 MRVL_SAI_VERSION = 1.13.0-1
+else ifeq ($(CONFIGURED_ARCH),armhf)
+MRVL_SAI_VERSION = 1.13.0-1
 else
 MRVL_SAI_VERSION = 1.13.0-1
 endif

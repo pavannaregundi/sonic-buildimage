@@ -8,6 +8,7 @@
 
 try:
     import os
+    import time
     from sonic_platform_base.psu_base import PsuBase
     from sonic_py_common import logger
     from sonic_platform.eeprom import Eeprom
@@ -15,13 +16,9 @@ try:
 except ImportError as e:
     raise ImportError(str(e) + "- required module not found")
 
-smbus_present = 1
-try:
-    import smbus
-except ImportError as e:
-    smbus_present = 0
-
 sonic_logger = logger.Logger('psu')
+INA230_DIR = "/sys/bus/i2c/devices/0-0040/iio:device0/"
+CPLD_DIR = "/sys/bus/i2c/devices/0-0041/"
 
 class Psu(PsuBase):
     """Nokia platform-specific PSU class for 7215 """
@@ -31,24 +28,14 @@ class Psu(PsuBase):
         # PSU is 1-based in Nokia platforms
         self.index = psu_index + 1
         self._fan_list = []
+        
 
         # PSU eeprom
         self.eeprom = Eeprom(is_psu=True, psu_index=self.index)
 
-    def _write_sysfs_file(self, sysfs_file, value):
-        rv = 'ERR'
-
-        if (not os.path.isfile(sysfs_file)):
-            return rv
-        try:
-            with open(sysfs_file, 'w') as fd:
-                rv = fd.write(str(value))
-        except Exception as e:
-            rv = 'ERR'
-
-        return rv
-
     def _read_sysfs_file(self, sysfs_file):
+        # On successful read, returns the value read from given
+        # reg_name and on failure returns 'ERR'
         rv = 'ERR'
 
         if (not os.path.isfile(sysfs_file)):
@@ -62,6 +49,43 @@ class Psu(PsuBase):
         rv = rv.rstrip('\r\n')
         rv = rv.lstrip(" ")
         return rv
+
+    def _write_sysfs_file(self, sysfs_file, value):
+        # On successful write, the value read will be written on
+        # reg_name and on failure returns 'ERR'
+        rv = 'ERR'
+
+        if (not os.path.isfile(sysfs_file)):
+            return rv
+        try:
+            with open(sysfs_file, 'w') as fd:
+                rv = fd.write(str(value))
+        except Exception as e:
+            rv = 'ERR'
+
+        # Ensure that the write operation has succeeded
+        if ((self._read_sysfs_file(sysfs_file)) != value ):
+            time.sleep(3)
+            if ((self._read_sysfs_file(sysfs_file)) != value ):
+                rv = 'ERR'
+
+        return rv
+    
+    def _get_active_psus(self):
+        """
+        Retrieves the operational status of the PSU and
+        calculates number of active PSU's
+
+        Returns:
+            Integer: Number of active PSU's
+        """  
+        active_psus = 0
+        psu1_good = self._read_sysfs_file(CPLD_DIR+"psu1_power_good")
+        psu2_good = self._read_sysfs_file(CPLD_DIR+"psu2_power_good")
+
+        active_psus = int(psu1_good) + int(psu2_good)
+        
+        return active_psus
 
     def get_name(self):
         """
@@ -79,24 +103,7 @@ class Psu(PsuBase):
         Returns:
             bool: True if PSU is present, False if not
         """
-
-        if smbus_present == 0:  # if called from psuutil outside of pmon
-            cmdstatus, psustatus = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0xa'])
-            psustatus = int(psustatus, 16)
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0xa
-            psustatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
-
-        if self.index == 1:
-            psustatus = psustatus & 1
-            if psustatus == 1:
-                return False
-        if self.index == 2:
-            psustatus = psustatus & 2
-            if psustatus == 2:
-                return False
+        #Fixed PSU's on 7215-IXS-A1, Always return True
 
         return True
 
@@ -143,25 +150,11 @@ class Psu(PsuBase):
         Returns:
             bool: True if PSU is operating properly, False if not
         """
+        psu_sysfs_str=CPLD_DIR+"psu{}_power_good".format(self.index)
+        psu_status = self._read_sysfs_file(psu_sysfs_str)
 
-        if smbus_present == 0:
-            cmdstatus, psustatus = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0xa'])
-            psustatus = int(psustatus, 16)
-            sonic_logger.log_warning("PMON psu-smbus - presence = 0 ")
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0xa
-            psustatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
-
-        if self.index == 1:
-            psustatus = psustatus & 4
-            if psustatus == 4:
-                return True
-        if self.index == 2:
-            psustatus = psustatus & 8
-            if psustatus == 8:
-                return True
+        if psu_status == '1':
+            return True
 
         return False
 
@@ -173,28 +166,43 @@ class Psu(PsuBase):
             A float number, the output voltage in volts,
             e.g. 12.1
         """
-        if smbus_present == 0:
-            cmdstatus, psustatus = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0xa'])
-            psustatus = int(psustatus, 16)
+        if(self.get_status()):
+            psu_voltage = self._read_sysfs_file(INA230_DIR+"in_voltage1_raw")
         else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0xa
-            psustatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
+            psu_voltage = 0.0
+        
+        psu_voltage = (float(psu_voltage)*1.25)/1000
 
-        if self.index == 1:
-            psustatus = psustatus & 4
-            if psustatus == 4:
-                psu_voltage = 12.0
-                return psu_voltage
-        if self.index == 2:
-            psustatus = psustatus & 8
-            if psustatus == 8:
-                psu_voltage = 12.0
-                return psu_voltage
-
-        psu_voltage = 0.0
         return psu_voltage
+    
+    def get_current(self):
+        """
+        Retrieves present electric current supplied by PSU
+
+        Returns:
+            A float number, the electric current in amperes, e.g 15.4
+        """
+        num_psus = self._get_active_psus()
+        if(self.get_status()):
+            psu_current = self._read_sysfs_file(INA230_DIR+"in_current3_raw")
+            psu_current = ((float(psu_current)*0.5)/1000)/num_psus
+        else:
+            psu_current = 0.0
+
+        return psu_current
+    
+    def get_power(self):
+        """
+        Retrieves current energy supplied by PSU
+
+        Returns:
+            A float number, the power in watts, e.g. 302.6
+        """
+        psu_voltage = self.get_voltage()
+        psu_current = self.get_current()
+        psu_power = psu_voltage * psu_current
+
+        return psu_power
 
     def get_position_in_parent(self):
         """
@@ -210,7 +218,7 @@ class Psu(PsuBase):
         Returns:
             bool: True if it is replaceable.
         """
-        return True
+        return False
 
     def get_powergood_status(self):
         """
@@ -219,24 +227,11 @@ class Psu(PsuBase):
             A boolean, True if PSU has stablized its output voltages and
             passed all its internal self-tests, False if not.
         """
+        psu_sysfs_str=CPLD_DIR+"psu{}_power_good".format(self.index)
+        psu_pg_status = self._read_sysfs_file(psu_sysfs_str)
 
-        if smbus_present == 0:
-            cmdstatus, psustatus = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0xa'])
-            psustatus = int(psustatus, 16)
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0xa
-            psustatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
-
-        if self.index == 1:
-            psustatus = psustatus & 4
-            if psustatus == 4:
-                return True
-        if self.index == 2:
-            psustatus = psustatus & 8
-            if psustatus == 8:
-                return True
+        if psu_pg_status == '1':
+            return True
 
         return False
 
@@ -262,8 +257,7 @@ class Psu(PsuBase):
             bool: True if status LED state is set successfully, False if
                   not
         """
-        # The firmware running in the PSU controls the LED
-        # and the PSU LED state cannot be changed from CPU.
+        # No Individual Status LED for 7215-IXS-A1
         return False
 
     def get_status_master_led(self):
@@ -273,17 +267,11 @@ class Psu(PsuBase):
         Returns:
             A string, one of the predefined STATUS_LED_COLOR_* strings.
         """
-        if (not os.path.isfile("/sys/class/gpio/psuLedGreen/value") or
-            not os.path.isfile("/sys/class/gpio/psuLedAmber/value")):
-            return None
+        psu_led = self._read_sysfs_file(CPLD_DIR+"psu_led")
 
-        green = self._read_sysfs_file("/sys/class/gpio/psuLedGreen/value")
-        amber = self._read_sysfs_file("/sys/class/gpio/psuLedAmber/value")
-        if green == "ERR" or amber == "ERR":
-            return None
-        if green == "1":
+        if psu_led == "green":
             return self.STATUS_LED_COLOR_GREEN
-        elif amber == "1":
+        elif psu_led == "amber":
             return self.STATUS_LED_COLOR_AMBER
         else:
             return None
@@ -296,22 +284,14 @@ class Psu(PsuBase):
             bool: True if status LED state is set successfully, False if
                   not
         """
-        if (not os.path.isfile("/sys/class/gpio/psuLedGreen/value") or
-            not os.path.isfile("/sys/class/gpio/psuLedAmber/value")):
-            return False
-
         if color == self.STATUS_LED_COLOR_GREEN:
-            rvg = self._write_sysfs_file("/sys/class/gpio/psuLedGreen/value", 1)
-            if rvg != "ERR":
-                rva = self._write_sysfs_file("/sys/class/gpio/psuLedAmber/value", 0)
+            status = self._write_sysfs_file(CPLD_DIR+"psu_led", "green")
         elif color == self.STATUS_LED_COLOR_AMBER:
-            rvg = self._write_sysfs_file("/sys/class/gpio/psuLedGreen/value", 0)
-            if rvg != "ERR":
-                rva = self._write_sysfs_file("/sys/class/gpio/psuLedAmber/value", 1)
+            status = self._write_sysfs_file(CPLD_DIR+"psu_led", "amber")
         else:
             return False
 
-        if rvg == "ERR" or rva == "ERR":
+        if status == "ERR":
             return False
 
         return True

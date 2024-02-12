@@ -1,19 +1,17 @@
-#include $(PLATFORM_PATH)/sdk.mk
 include $(PLATFORM_PATH)/sai.mk
 include $(PLATFORM_PATH)/docker-syncd-mrvl.mk
 include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
 include $(PLATFORM_PATH)/docker-saiserver-mrvl.mk
 include $(PLATFORM_PATH)/libsaithrift-dev.mk
 include $(PLATFORM_PATH)/one-image.mk
-ifeq ($(CONFIGURED_ARCH),arm64)
-include $(PLATFORM_PATH)/mrvl-prestera.mk
-endif
-include $(PLATFORM_PATH)/platform-nokia.mk
 include $(PLATFORM_PATH)/platform-marvell.mk
+ifeq ($(CONFIGURED_ARCH),$(filter $(CONFIGURED_ARCH),arm64 armhf))
+include $(PLATFORM_PATH)/mrvl-prestera.mk
+include $(PLATFORM_PATH)/platform-nokia.mk
+endif
 
 SONIC_ALL += $(SONIC_ONE_IMAGE) \
              $(DOCKER_FPM) 	\
-             $(DOCKER_PTF_MRVL) \
              $(DOCKER_SYNCD_MRVL_RPC)
 
 # Inject mrvl sai into syncd

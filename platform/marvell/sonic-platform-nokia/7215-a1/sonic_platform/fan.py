@@ -16,14 +16,9 @@ try:
 except ImportError as e:
     raise ImportError(str(e) + "- required module not found")
 
-smbus_present = 1
-try:
-    import smbus
-except ImportError as e:
-    smbus_present = 0
+MAX_IXS7215_FAN_SPEED = 24000
+WORKING_IXS7215_FAN_SPEED = 2400
 
-MAX_IXS7215_FAN_SPEED = 19000
-WORKING_IXS7215_FAN_SPEED = 960
 
 sonic_logger = logger.Logger('fan')
 
@@ -33,16 +28,19 @@ class Fan(FanBase):
 
     def __init__(self, fan_index, fan_drawer, psu_fan=False, dependency=None):
         self.is_psu_fan = psu_fan
-        ADT7473_DIR = "/sys/bus/i2c/devices/0-002e/hwmon/hwmon1/"
+        EMC2302_DIR = " "
+        i2c_path = "/sys/bus/i2c/devices/0-002e/hwmon/"
+        if(os.path.exists(i2c_path)):
+            hwmon_node = os.listdir(i2c_path)[0]
+            EMC2302_DIR = i2c_path + hwmon_node + '/'
 
         if not self.is_psu_fan:
             # Fan is 1-based in Nokia platforms
             self.index = fan_index + 1
             self.fan_drawer = fan_drawer
-            self.set_fan_speed_reg = ADT7473_DIR+"pwm{}".format(self.index)
-            self.get_fan_speed_reg = ADT7473_DIR+"fan{}_input".format(self.index)
+            self.set_fan_speed_reg = EMC2302_DIR+"pwm{}".format(self.index)
+            self.get_fan_speed_reg = EMC2302_DIR+"fan{}_input".format(self.index)
             self.max_fan_speed = MAX_IXS7215_FAN_SPEED
-            self.supported_led_color = ['off', 'green', 'red']
 
             # Fan eeprom
             self.eeprom = Eeprom(is_fan=True, fan_index=self.index)
@@ -51,16 +49,15 @@ class Fan(FanBase):
             self.index = fan_index
             self.dependency = dependency
 
-    def _get_i2c_register(self, reg_file):
+    def _read_sysfs_file(self, sysfs_file):
         # On successful read, returns the value read from given
         # reg_name and on failure returns 'ERR'
         rv = 'ERR'
 
-        if (not os.path.isfile(reg_file)):
+        if (not os.path.isfile(sysfs_file)):
             return rv
-
         try:
-            with open(reg_file, 'r') as fd:
+            with open(sysfs_file, 'r') as fd:
                 rv = fd.read()
         except Exception as e:
             rv = 'ERR'
@@ -69,24 +66,23 @@ class Fan(FanBase):
         rv = rv.lstrip(" ")
         return rv
 
-    def _set_i2c_register(self, reg_file, value):
+    def _write_sysfs_file(self, sysfs_file, value):
         # On successful write, the value read will be written on
         # reg_name and on failure returns 'ERR'
         rv = 'ERR'
 
-        if (not os.path.isfile(reg_file)):
+        if (not os.path.isfile(sysfs_file)):
             return rv
-
         try:
-            with open(reg_file, 'w') as fd:
+            with open(sysfs_file, 'w') as fd:
                 rv = fd.write(str(value))
         except Exception as e:
             rv = 'ERR'
 
         # Ensure that the write operation has succeeded
-        if (int(self._get_i2c_register(reg_file)) != value ):
+        if (int(self._read_sysfs_file(sysfs_file)) != value ):
             time.sleep(3)
-            if (int(self._get_i2c_register(reg_file)) != value ):
+            if (int(self._read_sysfs_file(sysfs_file)) != value ):
                 rv = 'ERR'
 
         return rv
@@ -110,23 +106,7 @@ class Fan(FanBase):
         Returns:
             bool: True if Fan is present, False if not
         """
-        if smbus_present == 0:
-            sonic_logger.log_info("PMON fan-smbus ERROR - presence ")
-            return False
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0xb
-            fanstatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
-
-        if self.index == 1:
-            fanstatus = fanstatus & 1
-            if fanstatus == 1:
-                return False
-        if self.index == 2:
-            fanstatus = fanstatus & 2
-            if fanstatus == 2:
-                return False
+        #Fixed Fan's on 7215-IXS-A1, Always return True
         return True
 
     def get_model(self):
@@ -174,7 +154,7 @@ class Fan(FanBase):
         """
         status = False
 
-        fan_speed = self._get_i2c_register(self.get_fan_speed_reg)
+        fan_speed = self._read_sysfs_file(self.get_fan_speed_reg)
         if (fan_speed != 'ERR'):
             if (int(fan_speed) > WORKING_IXS7215_FAN_SPEED):
                 status = True
@@ -206,7 +186,7 @@ class Fan(FanBase):
         Returns:
             bool: True if it is replaceable.
         """
-        return True
+        return False
 
 
     def get_speed(self):
@@ -218,7 +198,7 @@ class Fan(FanBase):
         """
         speed = 0
 
-        fan_speed = self._get_i2c_register(self.get_fan_speed_reg)
+        fan_speed = self._read_sysfs_file(self.get_fan_speed_reg)
         if (fan_speed != 'ERR'):
             speed_in_rpm = int(fan_speed)
         else:
@@ -240,7 +220,7 @@ class Fan(FanBase):
         """
         if self.get_presence():
             # The tolerance value is fixed as 25% for this platform
-            tolerance = 25
+            tolerance = 50
         else:
             tolerance = 0
 
@@ -258,23 +238,22 @@ class Fan(FanBase):
         if self.is_psu_fan:
             return False
 
-        # Set current fan duty cycle
-        # - 0x00 : fan off
-        # - 0x40 : 25% duty cycle
-        # - 0x80 : 50% duty cycle (default)
-        # - 0xff : 100% duty cycle (full speed)
         if speed in range(0, 6):
             fandutycycle = 0x00
-        elif speed in range(6, 41):
+        elif speed in range(6, 26):
             fandutycycle = 64
-        elif speed in range(41, 76):
+        elif speed in range(26, 41):
+            fandutycycle = 102
+        elif speed in range(41, 52):
             fandutycycle = 128
+        elif speed in range(52, 76):
+            fandutycycle = 192
         elif speed in range(76, 101):
             fandutycycle = 255
         else:
             return False
 
-        rv = self._set_i2c_register(self.set_fan_speed_reg, fandutycycle)
+        rv = self._write_sysfs_file(self.set_fan_speed_reg, fandutycycle)
         if (rv != 'ERR'):
             return True
         else:
@@ -291,41 +270,8 @@ class Fan(FanBase):
 
             off , red and green are the only settings 7215 fans
         """
-
-        if self.is_psu_fan or (color not in self.supported_led_color):
-            return False
-        if (color == self.STATUS_LED_COLOR_AMBER):
-            return False
-        if (color == self.STATUS_LED_COLOR_RED):
-            value = 0x02
-        elif (color == self.STATUS_LED_COLOR_GREEN):
-            value = 0x01
-        elif (color == self.STATUS_LED_COLOR_OFF):
-            value = 0x00
-        else:
-            return False
-
-        if smbus_present == 0:
-            return False
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICEREG = 0x8
-            original = bus.read_byte_data(DEVICE_ADDRESS, DEVICEREG)
-            if (self.index == 1):
-                new = value << 4
-                ledstatus = original & 0xcf
-                ledstatus = ledstatus | new
-            elif self.index == 2:
-                new = value << 6
-                ledstatus = original & 0x3f
-                ledstatus = ledstatus | new
-            else:
-                return False
-
-            bus.write_byte_data(DEVICE_ADDRESS, DEVICEREG, ledstatus)
-
-        return True
+        # No Individual Status LED for 7215-IXS-A1
+        return False
 
     def get_status_led(self):
         """
@@ -334,27 +280,7 @@ class Fan(FanBase):
         Returns:
             A string, one of the predefined STATUS_LED_COLOR_* strings.
         """
-
-        if self.is_psu_fan:
-            return None
-
-        if smbus_present == 0:
-            return None
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0x8
-            ledstatus = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
-
-        if self.index == 1:
-            ledstatus = (ledstatus & 0x30)
-            ledstatus = ledstatus >> 4
-        elif self.index == 2:
-            ledstatus = (ledstatus & 0xC0)
-            ledstatus = ledstatus >> 6
-        if ledstatus == 0x02:
-            return self.STATUS_LED_COLOR_RED
-        elif ledstatus == 0x1:
+        if self.get_status():
             return self.STATUS_LED_COLOR_GREEN
         else:
             return self.STATUS_LED_COLOR_OFF
@@ -369,15 +295,19 @@ class Fan(FanBase):
         """
         speed = 0
 
-        fan_duty = self._get_i2c_register(self.set_fan_speed_reg)
+        fan_duty = self._read_sysfs_file(self.set_fan_speed_reg)
         if (fan_duty != 'ERR'):
             dutyspeed = int(fan_duty)
             if dutyspeed == 0:
                 speed = 0
             elif dutyspeed == 64:
                 speed = 25
+            elif dutyspeed == 102:
+                speed = 40
             elif dutyspeed == 128:
                 speed = 50
+            elif dutyspeed == 192:
+                speed = 75
             elif dutyspeed == 255:
                 speed = 100
 

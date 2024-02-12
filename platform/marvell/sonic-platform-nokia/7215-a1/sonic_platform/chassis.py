@@ -7,6 +7,7 @@
 
 try:
     import os
+    import time
     import sys
     import glob
     from sonic_platform_base.chassis_base import ChassisBase
@@ -22,27 +23,20 @@ try:
 except ImportError as e:
     raise ImportError(str(e) + "- required module not found")
 
-smbus_present = 1
-try:
-    import smbus
-except ImportError as e:
-    smbus_present = 0
-
 MAX_SELECT_DELAY = 3600
 COPPER_PORT_START = 1
 COPPER_PORT_END = 48
 SFP_PORT_START = 49
 SFP_PORT_END = 52
 PORT_END = 52
+MAX_7215_COMPONENT=2
 
 # Device counts
 MAX_7215_FAN_DRAWERS = 2
 MAX_7215_FANS_PER_DRAWER = 1
 MAX_7215_PSU = 2
-MAX_7215_THERMAL = 6
-
-# Temp - disable these to help with early debug
-MAX_7215_COMPONENT = 2
+MAX_7215_THERMAL = 4
+CPLD_DIR = "/sys/bus/i2c/devices/0-0041/"
 
 SYSLOG_IDENTIFIER = "chassis"
 sonic_logger = logger.Logger(SYSLOG_IDENTIFIER)
@@ -73,7 +67,7 @@ class Chassis(ChassisBase):
         # Verify optoe2 driver SFP eeprom devices were enumerated and exist
         # then create the sfp nodes
         eeprom_path = "/sys/class/i2c-adapter/i2c-{0}/{0}-0050/eeprom"
-        mux_dev = sorted(glob.glob("/sys/class/i2c-adapter/i2c-0/i2c-[0-9]"))
+        mux_dev = sorted(glob.glob("/sys/class/i2c-adapter/i2c-1/i2c-[0-9]"))
         y = 0
         for index in range(self.SFP_PORT_START, self.SFP_PORT_END+1):
             mux_dev_num = mux_dev[y]
@@ -114,7 +108,45 @@ class Chassis(ChassisBase):
         for i in range(MAX_7215_COMPONENT):
             component = Component(i)
             self._component_list.append(component)
+  
+    def _read_sysfs_file(self, sysfs_file):
+        # On successful read, returns the value read from given
+        # reg_name and on failure returns 'ERR'
+        rv = 'ERR'
 
+        if (not os.path.isfile(sysfs_file)):
+            return rv
+        try:
+            with open(sysfs_file, 'r') as fd:
+                rv = fd.read()
+        except Exception as e:
+            rv = 'ERR'
+
+        rv = rv.rstrip('\r\n')
+        rv = rv.lstrip(" ")
+        return rv
+
+    def _write_sysfs_file(self, sysfs_file, value):
+        # On successful write, the value read will be written on
+        # reg_name and on failure returns 'ERR'
+        rv = 'ERR'
+
+        if (not os.path.isfile(sysfs_file)):
+            return rv
+        try:
+            with open(sysfs_file, 'w') as fd:
+                rv = fd.write(str(value))
+        except Exception as e:
+            rv = 'ERR'
+
+        # Ensure that the write operation has succeeded
+        if ((self._read_sysfs_file(sysfs_file)) != value ):
+            time.sleep(3)
+            if ((self._read_sysfs_file(sysfs_file)) != value ):
+                rv = 'ERR'
+
+        return rv
+  
     def get_sfp(self, index):
         """
         Retrieves sfp represented by (1-based) index <index>
@@ -160,13 +192,13 @@ class Chassis(ChassisBase):
         """
         return self._eeprom.part_number_str()
 
-    def get_service_tag(self):
+    def get_serial(self):
         """
-        Retrieves the Service Tag of the chassis
+        Retrieves the serial number of the chassis
         Returns:
-            string: Service Tag of chassis
+            string: Serial number of chassis
         """
-        return self._eeprom.service_tag_str()
+        return self._eeprom.serial_number_str()
 
     def get_status(self):
         """
@@ -187,15 +219,13 @@ class Chassis(ChassisBase):
         """
         return self._eeprom.base_mac_addr()
 
-    def get_serial(self):
+    def get_service_tag(self):
         """
-        Retrieves the hardware serial number for the chassis
-
+        Retrieves the Service Tag of the chassis
         Returns:
-            A string containing the hardware serial number for this
-            chassis.
+            string: Service Tag of chassis
         """
-        return self._eeprom.serial_number_str()
+        return self._eeprom.service_tag_str()
 
     def get_revision(self):
         """
@@ -204,14 +234,8 @@ class Chassis(ChassisBase):
         Returns:
             string: Revision value of chassis
         """
-        if smbus_present == 0:  # called from host
-            cmdstatus, value = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0x0'])
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0x0
-            value = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
-        return str(value)
+        #Revision is always 0 for 7215-IXS-A1
+        return str(0)
 
     def get_system_eeprom_info(self):
         """
@@ -239,6 +263,31 @@ class Chassis(ChassisBase):
         # the hardware portion of reboot cause can't be implemented
 
         return (ChassisBase.REBOOT_CAUSE_NON_HARDWARE, None)
+
+    def get_watchdog(self):
+        """
+        Retrieves hardware watchdog device on this chassis
+
+        Returns:
+            An object derived from WatchdogBase representing the hardware
+            watchdog device
+
+        Note:
+            We overload this method to ensure that watchdog is only initialized
+            when it is referenced. Currently, only one daemon can open the
+            watchdog. To initialize watchdog in the constructor causes multiple
+            daemon try opening watchdog when loading and constructing a chassis
+            object and fail. By doing so we can eliminate that risk.
+        """
+        try:
+            if self._watchdog is None:
+                from sonic_platform.watchdog import WatchdogImplBase
+                watchdog_device_path = "/dev/watchdog0"
+                self._watchdog = WatchdogImplBase(watchdog_device_path)
+        except Exception as e:
+            sonic_logger.log_warning(" Fail to load watchdog {}".format(repr(e)))
+
+        return self._watchdog
 
     def get_change_event(self, timeout=0):
         """
@@ -275,6 +324,7 @@ class Chassis(ChassisBase):
         port_dict = {}
         if wait_for_ever:
             # xrcvd will call this monitor loop in the "SYSTEM_READY" state
+            # logger.log_info(" wait_for_ever get_change_event %d" % timeout)
             timeout = MAX_SELECT_DELAY
             while True:
                 status = self.sfp_event.check_sfp_status(port_dict, timeout)
@@ -313,29 +363,22 @@ class Chassis(ChassisBase):
             return False
 
         if (color == 'off'):
-            value = 0x00
+            value = 'off'
         elif (color == 'amber'):
-            value = 0x01
+            value ='amber'
         elif (color == 'green'):
-            value = 0x02
+            value ='green'
         elif (color == 'amber_blink'):
-            value = 0x03
+            value = 'blink4-amber'
         elif (color == 'green_blink'):
-            value = 0x04
+            value = 'blink4-green'
         else:
             return False
-
         # Write sys led
-        if smbus_present == 0:  # called from host (e.g. 'show system-health')
-            cmdstatus, value = getstatusoutput_noshell(['sudo', 'i2cset', '-y', '0', '0x41', '0x7', str(value)])
-            if cmdstatus:
-                sonic_logger.log_warning("  System LED set %s failed" % value)
-                return False
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICEREG = 0x7
-            bus.write_byte_data(DEVICE_ADDRESS, DEVICEREG, value)
+        status = self._write_sysfs_file(CPLD_DIR+"system_led", value)
+        
+        if status == "ERR":
+            return False
 
         return True
 
@@ -348,61 +391,32 @@ class Chassis(ChassisBase):
             specified.
         """
         # Read sys led
-        if smbus_present == 0:  # called from host
-            cmdstatus, value = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0x7'])
-            value = int(value, 16)
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0x7
-            value = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG)
+        value = self._read_sysfs_file(CPLD_DIR+"system_led")
 
-        if value == 0x00:
+        if value == 'off':
             color = 'off'
-        elif value == 0x01:
+        elif value == 'amber':
             color = 'amber'
-        elif value == 0x02:
+        elif value == 'green':
             color = 'green'
-        elif value == 0x03:
+        elif value == 'blink4-amber':
             color = 'amber_blink'
-        elif value == 0x04:
+        elif value == 'blink4-green':
             color = 'green_blink'
         else:
             return None
 
         return color
 
-    def get_watchdog(self):
-        """
-        Retrieves hardware watchdog device on this chassis
-
-        Returns:
-            An object derived from WatchdogBase representing the hardware
-            watchdog device
-
-        Note:
-            We overload this method to ensure that watchdog is only initialized
-            when it is referenced. Currently, only one daemon can open the
-            watchdog. To initialize watchdog in the constructor causes multiple
-            daemon try opening watchdog when loading and constructing a chassis
-            object and fail. By doing so we can eliminate that risk.
-        """
-        try:
-            if self._watchdog is None:
-                from sonic_platform.watchdog import WatchdogImplBase
-                watchdog_device_path = "/dev/watchdog0"
-                self._watchdog = WatchdogImplBase(watchdog_device_path)
-        except Exception as e:
-            sonic_logger.log_warning(" Fail to load watchdog {}".format(repr(e)))
-
-        return self._watchdog
-
     def get_position_in_parent(self):
         """
-		Retrieves 1-based relative physical position in parent device. If the agent cannot determine the parent-relative position
-        for some reason, or if the associated value of entPhysicalContainedIn is '0', then the value '-1' is returned
+		Retrieves 1-based relative physical position in parent device. If the agent 
+        cannot determine the parent-relative position
+        for some reason, or if the associated value of entPhysicalContainedIn is '0', 
+        then the value '-1' is returned
 		Returns:
-		    integer: The 1-based relative physical position in parent device or -1 if cannot determine the position
+		    integer: The 1-based relative physical position in parent device or -1 if 
+            cannot determine the position
 		"""
         return -1
 

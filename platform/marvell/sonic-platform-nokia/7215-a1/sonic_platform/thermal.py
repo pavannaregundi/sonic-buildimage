@@ -1,5 +1,5 @@
 ########################################################################
-# Nokia IXS7215
+# Nokia IXS7215-A1
 #
 # Module contains an implementation of SONiC Platform Base API and
 # provides the Thermals' information which are available in the platform
@@ -20,17 +20,13 @@ class Thermal(ThermalBase):
     """Nokia platform-specific Thermal class"""
 
     I2C_CLASS_DIR = "/sys/class/i2c-adapter/"
-    I2C_DEV_MAPPING = (['i2c-0/0-004a/hwmon/', 1],
-                       ['i2c-0/0-004b/hwmon/', 1],
-                       ['i2c-0/0-002e/hwmon/', 1],
-                       ['i2c-0/0-002e/hwmon/', 2],
-                       ['i2c-0/0-002e/hwmon/', 3])
+    I2C_DEV_MAPPING = (['i2c-0/0-0048/hwmon/', 1],
+                       ['i2c-0/0-0049/hwmon/', 1])
 
-    HWMON_CLASS_DIR = "/sys/class/hwmon/"
+    HWMON_CLASS_DIR = "/sys/class/hwmon/hwmon0/"
+    AC5X_THERMAL_DIR = "/sys/class/hwmon/hwmon1/"
 
-    THERMAL_NAME = ("PCB PHY", "PCB MAC",
-                    "ADT7473-CPU", "ADT7473-LOC", "ADT7473-MAC",
-                    "CPU Core")
+    THERMAL_NAME = ("PCB BACK", "PCB FRONT", "AC5X CORE", "OOB PHY")
 
     def __init__(self, thermal_index):
         ThermalBase.__init__(self)
@@ -49,23 +45,20 @@ class Thermal(ThermalBase):
             hwmon_node = os.listdir(i2c_path)[0]
             self.SENSOR_DIR = i2c_path + hwmon_node + '/'
 
-        # ADT7473 temperature sensors
-        elif self.index < 6:
-            i2c_path = self.I2C_CLASS_DIR + self.I2C_DEV_MAPPING[self.index - 1][0]
-            sensor_index = self.I2C_DEV_MAPPING[self.index - 1][1]
-            sensor_high_suffix = "crit"
+        # SOC temperature sensor
+        elif self.index == 3:
+            dev_path = self.AC5X_THERMAL_DIR
+            sensor_index = 1
+            sensor_high_suffix = "max"
             sensor_high_crit_suffix = None
-            hwmon_node = os.listdir(i2c_path)[0]
-            self.SENSOR_DIR = i2c_path + hwmon_node + '/'
-
-        # Armada 38x SOC temperature sensor
+            self.SENSOR_DIR = dev_path
+        #
         else:
             dev_path = self.HWMON_CLASS_DIR
             sensor_index = 1
             sensor_high_suffix = None
-            sensor_high_crit_suffix = None
-            hwmon_node = os.listdir(dev_path)[0]
-            self.SENSOR_DIR = dev_path + hwmon_node + '/'
+            sensor_high_crit_suffix = "crit"
+            self.SENSOR_DIR = dev_path
 
         # sysfs file for current temperature value
         self.thermal_temperature_file = self.SENSOR_DIR \

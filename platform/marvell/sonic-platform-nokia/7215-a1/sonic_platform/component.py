@@ -8,7 +8,9 @@
 ########################################################################
 
 try:
+    import sys
     import os
+    import time
     import subprocess
     import ntpath
     from sonic_platform_base.component_base import ComponentBase
@@ -16,12 +18,14 @@ try:
 except ImportError as e:
     raise ImportError(str(e) + "- required module not found")
 
-smbus_present = 1
-try:
-    import smbus
-except ImportError as e:
-    smbus_present = 0
 
+if sys.version_info[0] < 3:
+    import commands as cmd
+else:
+    import subprocess as cmd
+
+
+CPLD_DIR = "/sys/bus/i2c/devices/0-0041/"
 
 class Component(ComponentBase):
     """Nokia platform-specific Component class"""
@@ -30,25 +34,66 @@ class Component(ComponentBase):
         ["System-CPLD", "Used for managing SFPs, LEDs, PSUs and FANs "],
         ["U-Boot", "Performs initialization during booting"],
     ]
-    CPLD_UPDATE_COMMAND1 = ['cp', '/usr/sbin/vme', '/tmp']
-    CPLD_UPDATE_COMMAND2 = ['cp', '', '/tmp']
-    CPLD_UPDATE_COMMAND3 = ['cd', '/tmp']
-    CPLD_UPDATE_COMMAND4 = ['./vme', '']
+    CPLD_UPDATE_COMMAND = ['./cpldupd_A1', '']
 
     def __init__(self, component_index):
         self.index = component_index
         self.name = self.CHASSIS_COMPONENTS[self.index][0]
         self.description = self.CHASSIS_COMPONENTS[self.index][1]
 
+    def _get_command_result(self, cmdline):
+        try:
+            proc = subprocess.Popen(cmdline.split(), stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT)
+            stdout = proc.communicate()[0]
+            proc.wait()
+            result = stdout.rstrip('\n')
+        except OSError:
+            result = None
+
+        return result
+    
+    def _read_sysfs_file(self, sysfs_file):
+        # On successful read, returns the value read from given
+        # reg_name and on failure returns 'ERR'
+        rv = 'ERR'
+
+        if (not os.path.isfile(sysfs_file)):
+            return rv
+        try:
+            with open(sysfs_file, 'r') as fd:
+                rv = fd.read()
+        except Exception as e:
+            rv = 'ERR'
+
+        rv = rv.rstrip('\r\n')
+        rv = rv.lstrip(" ")
+        return rv
+
+    def _write_sysfs_file(self, sysfs_file, value):
+        # On successful write, the value read will be written on
+        # reg_name and on failure returns 'ERR'
+        rv = 'ERR'
+
+        if (not os.path.isfile(sysfs_file)):
+            return rv
+        try:
+            with open(sysfs_file, 'w') as fd:
+                rv = fd.write(str(value))
+        except Exception as e:
+            rv = 'ERR'
+
+        # Ensure that the write operation has succeeded
+        if (int(self._read_sysfs_file(sysfs_file)) != value ):
+            time.sleep(3)
+            if (int(self._read_sysfs_file(sysfs_file)) != value ):
+                rv = 'ERR'
+
+        return rv
+
     def _get_cpld_version(self, cpld_number):
 
-        if smbus_present == 0:
-            cmdstatus, cpld_version = getstatusoutput_noshell(['sudo', 'i2cget', '-y', '0', '0x41', '0x2'])
-        else:
-            bus = smbus.SMBus(0)
-            DEVICE_ADDRESS = 0x41
-            DEVICE_REG = 0x2
-            cpld_version = str(bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG))
+        cpld_version = self._read_sysfs_file(CPLD_DIR+"cpldversion")
 
         return str(int(cpld_version, 16))
 
@@ -130,10 +175,7 @@ class Component(ComponentBase):
             return self._get_cpld_version(self.index)
 
         if self.index == 1:
-            cmd1 = ['grep', '--null-data', 'U-Boot', '/dev/mtd0ro']
-            cmd2 = ['head', '-1']
-            cmd3 = ['cut', '-d', ' ', '-f2-4']
-            cmdstatus, uboot_version = getstatusoutput_noshell_pipe(cmd1, cmd2, cmd3)
+            cmdstatus, uboot_version = cmd.getstatusoutput('grep --null-data ^U-Boot /dev/mtd0ro | cut -d" " -f2')
             return uboot_version
 
     def install_firmware(self, image_path):
@@ -147,23 +189,25 @@ class Component(ComponentBase):
             A boolean, True if install was successful, False if not
         """
         image_name = ntpath.basename(image_path)
-        print(" ixs7215 - install cpld {}".format(image_name))
+        print(" ixs-7215-A1 - install cpld {}".format(image_name))
 
         # check whether the image file exists
         if not os.path.isfile(image_path):
             print("ERROR: the cpld image {} doesn't exist ".format(image_path))
             return False
 
-        self.CPLD_UPDATE_COMMAND2[1] = image_path
-        self.CPLD_UPDATE_COMMAND4[1] = image_name
+        # check whether the cpld exe exists
+        if not os.path.isfile('/tmp/cpldupd_A1'):
+            print("ERROR: the cpld exe {} doesn't exist ".format('/tmp/cpldupd_A1'))
+            return False
+
+        self.CPLD_UPDATE_COMMAND[1] = image_name
 
         success_flag = False
  
         try:   
-            subprocess.check_call(self.CPLD_UPDATE_COMMAND1, stderr=subprocess.STDOUT)
-            subprocess.check_call(self.CPLD_UPDATE_COMMAND2, stderr=subprocess.STDOUT)
-            subprocess.check_call(self.CPLD_UPDATE_COMMAND3, stderr=subprocess.STDOUT)
-            subprocess.check_call(self.CPLD_UPDATE_COMMAND4, stderr=subprocess.STDOUT)
+            subprocess.check_call(self.CPLD_UPDATE_COMMAND, stderr=subprocess.STDOUT)
+
             success_flag = True
         except subprocess.CalledProcessError as e:
             print("ERROR: Failed to upgrade CPLD: rc={}".format(e.returncode))

@@ -81,7 +81,7 @@ class NokiaFanDrawer(FanDrawerBase):
         Returns:
             bool: True if it is replaceable.
         """
-        return True
+        return False
 
     def get_position_in_parent(self):
         """
