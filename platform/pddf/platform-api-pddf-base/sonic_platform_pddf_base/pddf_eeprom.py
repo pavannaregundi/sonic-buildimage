@@ -88,12 +88,18 @@ class PddfEeprom(eeprom_tlvinfo.TlvInfoDecoder):
                 tlv_index += (eeprom[tlv_index+1]) + 2
 
     def serial_number_str(self):
+        """ programming a static serial number for now as EEPROM is not flashed with
+            correct information """
+        return "59107V01000140800002M0A1"
         (is_valid, results) = self.get_tlv_field(self.eeprom_data, self._TLV_CODE_SERIAL_NUMBER)
         if not is_valid:
             return "N/A"
         return results[2].decode('ascii')
 
     def base_mac_addr(self):
+        """ programming a static base mac address  for now as EEPROM is not flashed with
+            correct information """
+        return "00:E0:4b:82:C0:0F"
         (is_valid, t) = self.get_tlv_field(self.eeprom_data, self._TLV_CODE_MAC_BASE)
         if not is_valid or t[1] != 6:
             return super(TlvInfoDecoder, self).switchaddrstr(e)
@@ -101,6 +107,9 @@ class PddfEeprom(eeprom_tlvinfo.TlvInfoDecoder):
         return ":".join(["{:02x}".format(T) for T in t[2]]).upper()
 
     def modelstr(self):
+        """ programming a static product name for now as EEPROM is not flashed with
+            correct information """
+        return "dbmvtx9180"
         (is_valid, results) = self.get_tlv_field(self.eeprom_data, self._TLV_CODE_PRODUCT_NAME)
         if not is_valid:
             return "N/A"
@@ -108,6 +117,9 @@ class PddfEeprom(eeprom_tlvinfo.TlvInfoDecoder):
         return results[2].decode('ascii')
 
     def part_number_str(self):
+        """ programming a static part number for now as EEPROM is not flashed with
+            correct information """
+        return "59107V010001"
         (is_valid, results) = self.get_tlv_field(self.eeprom_data, self._TLV_CODE_PART_NUMBER)
         if not is_valid:
             return "N/A"
@@ -122,6 +134,9 @@ class PddfEeprom(eeprom_tlvinfo.TlvInfoDecoder):
         return results[2].decode('ascii')
 
     def revision_str(self):
+        """ programming a static revision  for now as EEPROM is not flashed with
+            correct information """
+        return "02"
         (is_valid, results) = self.get_tlv_field(self.eeprom_data, self._TLV_CODE_DEVICE_VERSION)
         if not is_valid:
             return "N/A"
