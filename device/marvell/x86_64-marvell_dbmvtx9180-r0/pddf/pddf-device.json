@@ -34,9 +34,8 @@
             "i2c_kempld",
             "kempld-wdt",
             "gpio_kempld",
-	    "i2c_mux_pca954x",
-	    "gpio_pca953x",
-	    "lm90"
+            "i2c_mux_pca954x",
+            "gpio_pca953x"
         ],
         "pddf_kos":
         [
@@ -48,9 +47,9 @@
             "pddf_xcvr_driver_module",
             "pddf_psu_driver_module",
             "pddf_psu_module",
-	    "pddf_gpio_module",
             "pddf_fan_driver_module",
             "pddf_fan_module",
+            "pddf_gpio_module",
             "pddf_led_module",
             "pddf_sysstatus_module"
         ]
@@ -76,6 +75,8 @@
             "topo_info": {"dev_addr": "0x1"},
             "DEVICES": 
             [
+                {"dev": "FPGAI2C0"},
+                {"dev": "FAN-CTRL"},
                 {"dev": "EEPROM1"},
                 {"dev": "EEPROM2"},
                 {"dev": "MUX1"},
@@ -86,6 +87,57 @@
         }
     },
    
+   "FPGAI2C0":
+    {
+        "dev_info": {"device_type": "FPGA_I2C", "device_name": "FPGAI2C0", "device_parent": "KEMPBUS0"},
+        "i2c":
+        {
+            "topo_info": {"parent_bus": "0x1", "dev_addr": "0x32", "dev_type": "i2c_cpld"},
+            "dev_attr": {}
+        }
+    },
+
+
+    "FAN-CTRL":
+    {
+        "dev_info": {"device_type": "FAN", "device_name": "FAN-CTRL", "device_parent": "KEMPBUS0"},
+        "i2c":
+        {
+            "topo_info": {"parent_bus": "0x1", "dev_addr": "0x32", "dev_type": "fan_ctrl"},
+            "dev_attr": { "num_fantrays":"4"},
+            "attr_list":
+            [
+                { "attr_name":"fan1_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x1", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan2_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x2", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan3_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x4", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan4_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x8", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan5_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x10", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan6_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x20", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan7_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x40", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan8_fault", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x04", "attr_mask":"0x80", "attr_cmpval":"", "attr_len":"1"},
+                { "attr_name":"fan1_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x20", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan2_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x22", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan3_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x24", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan4_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x26", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan5_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x28", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan6_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x2a", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan7_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x2c", "attr_cmpval":"", "attr_len":"2"},
+                { "attr_name":"fan8_input", "attr_devname":"FPGAI2C0", "attr_devtype":"cpld", "attr_offset":"0x2e", "attr_cmpval":"", "attr_len":"2"}
+            ]
+        }
+    },
+
+    "SYSSTATUS":
+    {
+        "dev_info":{ "device_type":"SYSSTAT", "device_name":"SYSSTATUS"},
+        "dev_attr":{ },
+        "attr_list":
+        [
+            { "attr_name":"board_info","attr_devaddr":"0x32", "attr_offset":"0x1","attr_mask":"","attr_len":"0x1"},
+            { "attr_name":"cpld1_version","attr_devaddr":"0x32","attr_offset":"0x0","attr_mask":"","attr_len":"0x1"}
+        ]
+    },
+
     "EEPROM1": 
     {
         "dev_info": {"device_type": "EEPROM", "device_name": "EEPROM1", "device_parent": "KEMPBUS0"},
@@ -170,7 +222,6 @@
             "dev_attr": { "virt_bus":"0xa", "idle_state":"-1"},
 	    "channel":
 	    [
-		    { "chn":"0", "dev":"TEMP1" },
 		    { "chn":"4", "dev":"PORT6" },
 		    { "chn":"6", "dev":"PORT2" },
 		    { "chn":"7", "dev":"PORT5" }
@@ -298,7 +349,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT1-EEPROM", "device_parent":"MUX1", "virt_parent":"PORT1"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x2", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x2", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -381,7 +432,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT2-EEPROM", "device_parent":"MUX2", "virt_parent":"PORT2"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x10", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x10", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -434,7 +485,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT3-EEPROM", "device_parent":"MUX7", "virt_parent":"PORT3"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x33", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x33", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -487,7 +538,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT4-EEPROM", "device_parent":"MUX7", "virt_parent":"PORT4"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x32", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x32", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -570,7 +621,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT5-EEPROM", "device_parent":"MUX2", "virt_parent":"PORT5"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x11", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x11", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -624,7 +675,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT6-EEPROM", "device_parent":"MUX2", "virt_parent":"PORT6"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0xe", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0xe", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -678,7 +729,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT7-EEPROM", "device_parent":"MUX7", "virt_parent":"PORT7"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x35", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x35", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -731,7 +782,7 @@
         "dev_info": { "device_type":"", "device_name":"PORT8-EEPROM", "device_parent":"MUX7", "virt_parent":"PORT8"},
         "i2c":
         {
-            "topo_info": { "parent_bus":"0x34", "dev_addr":"0x50", "dev_type":"optoe2"},
+            "topo_info": { "parent_bus":"0x34", "dev_addr":"0x50", "dev_type":"optoe3"},
             "attr_list":
             [
                 { "attr_name":"eeprom"}
@@ -763,21 +814,5 @@
                 { "attr_name":"xcvr_reset", "attr_devaddr":"0x60", "attr_devtype":"gpio", "attr_devname":"GPIO12", "attr_offset":"0xa", "attr_mask":"0x1", "attr_cmpval":"", "attr_len":"1"}
             ]
         }
-    },
-
-    "TEMP1" :
-    {
-	    "dev_info": { "device_type":"TEMP_SENSOR", "device_name":"TEMP1", "device_parent":"MUX2"},
-	    "dev_attr": { "display_name":"Temp Sensor Max 6695"},
-	    "i2c":
-	    {
-		    "topo_info": { "parent_bus":"0xa", "dev_addr":"0x18", "dev_type":"lm90"},
-		    "attr_list":
-		    [
-			    { "attr_name": "temp1_high_threshold", "drv_attr_name":"temp1_max"},
-			    { "attr_name": "temp1_max_hyst"},
-			    { "attr_name": "temp1_input"}
-		    ]
-	    }
     }
 }
