@@ -8,6 +8,12 @@
            {
                "valmap-OSFP": {"1":true, "0":false },
                "valmap-QSFP-DD": {"1":true, "0":false }
+           },
+
+           "plug_status":
+           {
+               "inserted": "1",
+               "removed": "0"
            }
         }
     },
@@ -58,9 +64,17 @@
             }
         },
 
+	"FAN_INLET_MAX_SPEED":"14000",
+	"FAN_EXHAUST_MAX_SPEED":"12500",
+	"FAN_MAX_SPEED_TOLERANCE":"10",
+
         "duty_cycle_to_pwm": "lambda dc: ((dc*100)/625 -1)",
 
         "pwm_to_duty_cycle": "lambda pwm: (((pwm+1)*625+75)/100)"
-    }
+    },
 
+    "REBOOT_CAUSE":
+    {
+        "reboot_cause_file": "/host/reboot-cause/reboot-cause.txt"
+    }
 }
