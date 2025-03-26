@@ -8,12 +8,6 @@
            {
                "valmap-OSFP": {"1":true, "0":false },
                "valmap-QSFP-DD": {"1":true, "0":false }
-           },
-
-           "plug_status":
-           {
-               "inserted": "1",
-               "removed": "0"
            }
         }
     },
@@ -71,6 +65,12 @@
         "duty_cycle_to_pwm": "lambda dc: ((dc*100)/625 -1)",
 
         "pwm_to_duty_cycle": "lambda pwm: (((pwm+1)*625+75)/100)"
+    },
+
+    "TEMP_SENSOR":
+    {
+	"MIBS_TSENE_GAIN":"0.095",
+	"MIBS_TSENE_OFFSET":"118"
     },
 
     "REBOOT_CAUSE":

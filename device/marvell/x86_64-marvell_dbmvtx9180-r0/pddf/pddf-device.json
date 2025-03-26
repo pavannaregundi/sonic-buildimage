@@ -5,7 +5,7 @@
         "num_fans_pertray":2,
         "num_psus":2,
         "num_ports":8,
-        "num_temps": 1,
+        "num_temps": 3,
         "pddf_dev_types":
         {
             "description":"MARVELL DB-MVTX9180 - Below is the list of supported PDDF device types (chip names) for various components. If any component uses some other driver, we will create the client using 'echo <dev-address> <dev-type> > <path>/new_device' method",
@@ -814,5 +814,20 @@
                 { "attr_name":"xcvr_reset", "attr_devaddr":"0x60", "attr_devtype":"gpio", "attr_devname":"GPIO12", "attr_offset":"0xa", "attr_mask":"0x1", "attr_cmpval":"", "attr_len":"1"}
             ]
         }
+    },
+
+    "TEMP1" :
+    {
+	"dev_attr": { "display_name":"Temp Sensor Internal"}
+    },
+
+    "TEMP2" :
+    {
+	"dev_attr": { "display_name":"Temp Sensor External-A"}
+    },
+
+    "TEMP3" :
+    {
+	"dev_attr": { "display_name":"Temp Sensor External-B"}
     }
 }
