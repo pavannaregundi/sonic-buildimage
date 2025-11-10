@@ -1,1 +1,1 @@
-or-tools/build/lib/*.so* /usr/lib/
+or-tools-*/build/lib/*.so* /usr/lib/
